@@ -46,6 +46,9 @@ function M.toggle()
 		end
 	end
 
+	-- Force visual refresh to ensure all windows update immediately
+	vim.cmd("redraw!")
+
 	vim.notify("Focus mode " .. (enabled and "ON" or "OFF"))
 end
 
