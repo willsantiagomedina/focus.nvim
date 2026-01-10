@@ -53,11 +53,16 @@ local function setup_autocmd()
 		return
 	end
 
-	autocmd_id = vim.api.nvim_create_autocmd({ "WinNew", "WinEnter" }, {
+	-- WinNew fires when a new window is created
+	-- We handle it to snapshot and apply focus to new windows
+	autocmd_id = vim.api.nvim_create_autocmd("WinNew", {
 		callback = function()
 			if enabled then
-				local win = vim.api.nvim_get_current_win()
-				apply_focus_to_window(win)
+				-- Use vim.schedule to ensure window is fully initialized
+				vim.schedule(function()
+					local win = vim.api.nvim_get_current_win()
+					apply_focus_to_window(win)
+				end)
 			end
 		end,
 	})
@@ -114,9 +119,7 @@ function M.toggle()
 		saved = {}
 
 		-- Force visual refresh to ensure all windows update immediately
-		vim.cmd("redraw!")
-		
-		-- Additional scheduled redraw for stubborn cases
+		-- Scheduled redraw ensures the UI updates even if windows are not yet fully rendered
 		vim.schedule(function()
 			vim.cmd("redraw!")
 		end)
