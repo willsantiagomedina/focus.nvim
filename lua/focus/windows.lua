@@ -56,12 +56,17 @@ local function setup_autocmd()
 	-- WinNew fires when a new window is created
 	-- We handle it to snapshot and apply focus to new windows
 	autocmd_id = vim.api.nvim_create_autocmd("WinNew", {
-		callback = function()
+		callback = function(args)
 			if enabled then
 				-- Use vim.schedule to ensure window is fully initialized
 				vim.schedule(function()
-					local win = vim.api.nvim_get_current_win()
-					apply_focus_to_window(win)
+					-- Get all current windows and find the newest one (not in saved)
+					for _, win in ipairs(vim.api.nvim_list_wins()) do
+						if not saved[win] then
+							apply_focus_to_window(win)
+							break
+						end
+					end
 				end)
 			end
 		end,
@@ -108,6 +113,7 @@ function M.toggle()
 		remove_autocmd()
 
 		-- Disabling: restore original state from snapshots
+		-- We iterate over all windows and restore those that have saved state
 		for _, win in ipairs(vim.api.nvim_list_wins()) do
 			if saved[win] then
 				set_win_opt(win, "winhighlight", saved[win].winhighlight or "")
@@ -116,6 +122,7 @@ function M.toggle()
 		end
 
 		-- Clear saved state after restoring
+		-- This also cleans up state for any windows that were closed while focus was enabled
 		saved = {}
 
 		-- Force visual refresh to ensure all windows update immediately
