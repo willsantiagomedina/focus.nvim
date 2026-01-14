@@ -76,6 +76,7 @@ require('focus').setup({
   enable_on_startup = false,  -- Start with focus mode enabled
   inactive_bg = '#1e1e1e',    -- Background color for inactive windows
   active_bg = false,          -- Set to false to keep the colorscheme background
+  dim_amount = false,         -- Auto-compute inactive_bg by darkening current bg (0..1)
   auto_enable = false,        -- Auto toggle when more than one split is open
 })
 ```
@@ -110,6 +111,17 @@ require('focus').setup({
   inactive_bg = 'MyInactiveBg',
   -- Set to 'NONE' if you want a transparent active window background
   active_bg = 'NONE',
+})
+```
+
+### Dim Amount (Auto-calc)
+
+If you prefer an auto-calculated dim based on your current background:
+
+```lua
+require('focus').setup({
+  inactive_bg = false,
+  dim_amount = 0.2, -- 0..1, higher means darker inactive windows
 })
 ```
 

@@ -24,12 +24,70 @@ local function resolve_bg(value)
 		return value
 	end
 
+	if value == "NONE" or value == "none" then
+		return "NONE"
+	end
+
 	local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = value, link = true })
 	if ok and hl and hl.bg then
 		return hl.bg
 	end
 
 	return value
+end
+
+local function color_to_rgb(color)
+	if type(color) == "string" then
+		if not color:match("^#%x%x%x%x%x%x$") then
+			return nil
+		end
+		color = tonumber(color:sub(2), 16)
+	end
+
+	if type(color) ~= "number" then
+		return nil
+	end
+
+	local r = math.floor(color / 65536) % 256
+	local g = math.floor(color / 256) % 256
+	local b = color % 256
+	return r, g, b
+end
+
+local function blend_with_black(color, amount)
+	if amount <= 0 then
+		return color
+	end
+	if amount >= 1 then
+		return "#000000"
+	end
+
+	local r, g, b = color_to_rgb(color)
+	if not r then
+		return nil
+	end
+
+	r = math.floor(r * (1 - amount))
+	g = math.floor(g * (1 - amount))
+	b = math.floor(b * (1 - amount))
+	return string.format("#%02x%02x%02x", r, g, b)
+end
+
+local function resolve_dim_bg(opts)
+	if opts.inactive_bg then
+		return resolve_bg(opts.inactive_bg)
+	end
+
+	if not opts.dim_amount then
+		return nil
+	end
+
+	local base_bg = resolve_bg(opts.active_bg) or hl_get("Normal").bg
+	if base_bg == "NONE" then
+		return nil
+	end
+
+	return blend_with_black(base_bg, opts.dim_amount)
 end
 
 local function ensure_saved_winhighlight(win)
@@ -50,7 +108,7 @@ end
 
 local function apply_focus()
 	local opts = config.options
-	local inactive_bg = resolve_bg(opts.inactive_bg)
+	local inactive_bg = resolve_dim_bg(opts)
 	local active_bg = resolve_bg(opts.active_bg)
 
 	if inactive_bg then
