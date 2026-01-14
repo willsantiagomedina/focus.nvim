@@ -121,7 +121,7 @@ If you prefer an auto-calculated dim based on your current background:
 ```lua
 require('focus').setup({
   inactive_bg = false,
-  dim_amount = 0.2, -- 0..1, higher means darker inactive windows
+  dim_amount = 0.25, -- 0..1, higher means darker inactive windows
 })
 ```
 

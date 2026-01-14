@@ -54,23 +54,38 @@ local function color_to_rgb(color)
 	return r, g, b
 end
 
-local function blend_with_black(color, amount)
+local function blend_between(source, target, amount)
 	if amount <= 0 then
-		return color
+		return source
 	end
 	if amount >= 1 then
-		return "#000000"
+		return target
 	end
 
-	local r, g, b = color_to_rgb(color)
-	if not r then
+	local r1, g1, b1 = color_to_rgb(source)
+	local r2, g2, b2 = color_to_rgb(target)
+	if not r1 or not r2 then
 		return nil
 	end
 
-	r = math.floor(r * (1 - amount))
-	g = math.floor(g * (1 - amount))
-	b = math.floor(b * (1 - amount))
+	local r = math.floor(r1 + (r2 - r1) * amount)
+	local g = math.floor(g1 + (g2 - g1) * amount)
+	local b = math.floor(b1 + (b2 - b1) * amount)
 	return string.format("#%02x%02x%02x", r, g, b)
+end
+
+local function resolve_dim_target()
+	local normal_nc = hl_get("NormalNC")
+	if normal_nc and normal_nc.bg then
+		return normal_nc.bg
+	end
+
+	return "#000000"
+end
+
+local function blend_with_target(color, amount)
+	local target = resolve_dim_target()
+	return blend_between(color, target, amount)
 end
 
 local function resolve_dim_bg(opts)
@@ -87,7 +102,7 @@ local function resolve_dim_bg(opts)
 		return nil
 	end
 
-	return blend_with_black(base_bg, opts.dim_amount)
+	return blend_with_target(base_bg, opts.dim_amount)
 end
 
 local function ensure_saved_winhighlight(win)

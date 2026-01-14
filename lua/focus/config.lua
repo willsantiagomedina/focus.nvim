@@ -4,7 +4,7 @@ M.defaults = {
 	enable_on_startup = false,
 	inactive_bg = "#1c1c1c",
 	active_bg = false,
-	dim_amount = false,
+	dim_amount = 0.25,
 	auto_enable = false,
 }
 
