@@ -1,8 +1,6 @@
 local M = {}
 
 M.enabled = false
-M.saved = M.saved or {}
-M.saved.winhighlight = M.saved.winhighlight or {}
-M.saved.cursorline = M.saved.cursorline or {}
+M.saved_winhighlight = M.saved_winhighlight or {}
 
 return M

@@ -9,6 +9,8 @@ A Neovim plugin that enhances visual focus by dimming inactive windows, helping 
 - **Lightweight and fast** - Minimal performance impact, no delays or lag
 - **Automatic window tracking** - Seamlessly updates focus as you navigate between windows
 - **Customizable highlight colors** - Adjust dimming colors to match your theme and preferences
+- **Consistent dimming** - Applies to sign column, end-of-buffer, and floating windows
+- **Auto enable mode** - Optionally toggle focus based on active split count
 - **Neovim 0.9+ compatibility** - Built for modern Neovim with stable API support
 
 ## Installation
@@ -35,7 +37,7 @@ With custom configuration:
     require('focus').setup({
       enable_on_startup = false,
       inactive_bg = '#1e1e1e',
-      active_bg = 'NONE',
+      active_bg = false,
       auto_enable = false,
     })
   end
@@ -48,6 +50,13 @@ Toggle focus mode on and off with the `:Focus` command:
 
 ```vim
 :Focus
+```
+
+You can also explicitly enable or disable focus mode:
+
+```vim
+:FocusEnable
+:FocusDisable
 ```
 
 ### Keybinding Example
@@ -66,8 +75,8 @@ vim.keymap.set('n', '<leader>f', ':Focus<CR>', { desc = 'Toggle focus mode' })
 require('focus').setup({
   enable_on_startup = false,  -- Start with focus mode enabled
   inactive_bg = '#1e1e1e',    -- Background color for inactive windows
-  active_bg = 'NONE',         -- Background color for active window
-  auto_enable = false,        -- Automatically enable focus mode
+  active_bg = false,          -- Set to false to keep the colorscheme background
+  auto_enable = false,        -- Auto toggle when more than one split is open
 })
 ```
 
@@ -99,8 +108,14 @@ vim.api.nvim_set_hl(0, 'MyInactiveBg', { bg = '#1a1a1a' })
 
 require('focus').setup({
   inactive_bg = 'MyInactiveBg',
+  -- Set to 'NONE' if you want a transparent active window background
+  active_bg = 'NONE',
 })
 ```
+
+### Compatibility Note
+
+If you previously used `dim_bg`, it is still supported and mapped to `inactive_bg`.
 
 ## Philosophy
 

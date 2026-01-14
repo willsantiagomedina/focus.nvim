@@ -1,138 +1,208 @@
-local config = require("focus.config")
-
 local M = {}
 
-local enabled = false
-local saved = {}
-local autocmd_id = nil
+local config = require("focus.config")
+local state = require("focus.state")
 
--- create dim background highlight (visible in ALL themes)
-local function ensure_highlight()
-	vim.api.nvim_set_hl(0, "FocusDim", {
-		bg = config.options.dim_bg,
-	})
+local function hl_get(name)
+	return vim.api.nvim_get_hl(0, { name = name, link = false })
 end
 
-local function get_win_opt(win, opt)
-	return vim.api.nvim_get_option_value(opt, { win = win })
+local function hl_set(name, val)
+	vim.api.nvim_set_hl(0, name, val)
 end
 
-local function set_win_opt(win, opt, value)
-	vim.api.nvim_set_option_value(opt, value, { win = win })
+local function get_winhighlight(win)
+	return vim.api.nvim_win_get_option(win, "winhighlight")
 end
 
--- Apply focus effect to a new window created while focus mode is enabled
-local function apply_focus_to_window(win)
-	if not enabled then
-		return
+local function set_winhighlight(win, value)
+	vim.api.nvim_win_set_option(win, "winhighlight", value)
+end
+
+local function resolve_bg(value)
+	if type(value) ~= "string" then
+		return value
 	end
 
+	local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = value, link = true })
+	if ok and hl and hl.bg then
+		return hl.bg
+	end
+
+	return value
+end
+
+local function ensure_saved_winhighlight(win)
+	if state.saved_winhighlight[win] == nil then
+		state.saved_winhighlight[win] = get_winhighlight(win)
+	end
+end
+
+local function build_dim_group(name, inactive_bg)
+	local base = hl_get(name)
+	if not base or vim.tbl_isempty(base) then
+		base = hl_get("Normal")
+	end
+	local dim = vim.tbl_extend("force", {}, base)
+	dim.bg = inactive_bg
+	return dim
+end
+
+local function apply_focus()
+	local opts = config.options
+	local inactive_bg = resolve_bg(opts.inactive_bg)
+	local active_bg = resolve_bg(opts.active_bg)
+
+	if inactive_bg then
+		hl_set("FocusDimNormal", build_dim_group("Normal", inactive_bg))
+		hl_set("FocusDimSignColumn", build_dim_group("SignColumn", inactive_bg))
+		hl_set("FocusDimEndOfBuffer", build_dim_group("EndOfBuffer", inactive_bg))
+		hl_set("FocusDimNormalFloat", build_dim_group("NormalFloat", inactive_bg))
+	end
+
+	if active_bg then
+		hl_set("FocusActiveNormal", build_dim_group("Normal", active_bg))
+	end
+end
+
+local function build_winhighlight(base, mapping)
+	if not mapping or mapping == "" then
+		return base
+	end
+	if not base or base == "" then
+		return mapping
+	end
+	return base .. "," .. mapping
+end
+
+local function update_winhighlight()
+	local opts = config.options
 	local current = vim.api.nvim_get_current_win()
+	local wins = vim.api.nvim_tabpage_list_wins(0)
 
-	-- Snapshot the original state of the new window
-	if not saved[win] then
-		saved[win] = {
-			winhighlight = get_win_opt(win, "winhighlight"),
-			cursorline = get_win_opt(win, "cursorline"),
-		}
-	end
+	for _, win in ipairs(wins) do
+		if vim.api.nvim_win_is_valid(win) then
+			ensure_saved_winhighlight(win)
+			local base = state.saved_winhighlight[win]
+			local mapping = ""
 
-	-- Apply focus effect based on whether it's the current window
-	if win == current then
-		set_win_opt(win, "winhighlight", "")
-		set_win_opt(win, "cursorline", config.options.cursorline)
-	else
-		set_win_opt(win, "winhighlight", "Normal:FocusDim,NormalNC:FocusDim")
-		set_win_opt(win, "cursorline", false)
+			if win == current then
+				if opts.active_bg then
+					mapping = "Normal:FocusActiveNormal"
+				end
+			else
+				if opts.inactive_bg then
+					mapping = "Normal:FocusDimNormal,SignColumn:FocusDimSignColumn,EndOfBuffer:FocusDimEndOfBuffer,NormalFloat:FocusDimNormalFloat"
+				end
+			end
+
+			set_winhighlight(win, build_winhighlight(base, mapping))
+		end
 	end
 end
+end
 
--- Setup autocmd to handle windows created while focus mode is enabled
-local function setup_autocmd()
-	if autocmd_id then
+local function is_focusable_window(win)
+	local cfg = vim.api.nvim_win_get_config(win)
+	return cfg.relative == ""
+end
+
+local function focusable_window_count()
+	local wins = vim.api.nvim_tabpage_list_wins(0)
+	local count = 0
+	for _, win in ipairs(wins) do
+		if is_focusable_window(win) then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+local function auto_update()
+	if not config.options.auto_enable then
 		return
 	end
 
-	-- WinNew fires when a new window is created
-	-- We handle it to snapshot and apply focus to new windows
-	autocmd_id = vim.api.nvim_create_autocmd("WinNew", {
-		callback = function(args)
-			if enabled then
-				-- Use vim.schedule to ensure window is fully initialized
-				vim.schedule(function()
-					-- Get all current windows and find the newest one (not in saved)
-					for _, win in ipairs(vim.api.nvim_list_wins()) do
-						if not saved[win] then
-							apply_focus_to_window(win)
-							break
-						end
-					end
-				end)
-			end
-		end,
-	})
+	if focusable_window_count() > 1 then
+		M.enable({ silent = true })
+	else
+		M.disable({ silent = true })
+	end
 end
 
--- Remove autocmd when focus mode is disabled
-local function remove_autocmd()
-	if autocmd_id then
-		vim.api.nvim_del_autocmd(autocmd_id)
-		autocmd_id = nil
+function M.enable(opts)
+	if state.enabled then
+		return
+	end
+
+	state.enabled = true
+	apply_focus()
+	update_winhighlight()
+	vim.cmd("redraw!")
+
+	if not (opts and opts.silent) then
+		vim.notify("Focus mode ON")
+	end
+end
+
+function M.disable(opts)
+	if not state.enabled then
+		return
+	end
+
+	for win, value in pairs(state.saved_winhighlight) do
+		if vim.api.nvim_win_is_valid(win) then
+			set_winhighlight(win, value)
+		end
+	end
+	state.saved_winhighlight = {}
+	state.enabled = false
+	vim.cmd("redraw!")
+
+	if not (opts and opts.silent) then
+		vim.notify("Focus mode OFF")
 	end
 end
 
 function M.toggle()
-	enabled = not enabled
-	local current = vim.api.nvim_get_current_win()
-
-	ensure_highlight()
-
-	if enabled then
-		-- Setup autocmd to handle new windows while focus mode is enabled
-		setup_autocmd()
-
-		-- Enabling: snapshot original state for each window (only if not already saved)
-		for _, win in ipairs(vim.api.nvim_list_wins()) do
-			if not saved[win] then
-				saved[win] = {
-					winhighlight = get_win_opt(win, "winhighlight"),
-					cursorline = get_win_opt(win, "cursorline"),
-				}
-			end
-
-			if win == current then
-				set_win_opt(win, "winhighlight", "")
-				set_win_opt(win, "cursorline", config.options.cursorline)
-			else
-				set_win_opt(win, "winhighlight", "Normal:FocusDim,NormalNC:FocusDim")
-				set_win_opt(win, "cursorline", false)
-			end
-		end
+	if state.enabled then
+		M.disable()
 	else
-		-- Remove autocmd when disabling
-		remove_autocmd()
+		M.enable()
+	end
+end
 
-		-- Disabling: restore original state from snapshots
-		-- We iterate over all windows and restore those that have saved state
-		for _, win in ipairs(vim.api.nvim_list_wins()) do
-			if saved[win] then
-				set_win_opt(win, "winhighlight", saved[win].winhighlight or "")
-				set_win_opt(win, "cursorline", saved[win].cursorline or false)
-			end
-		end
-
-		-- Clear saved state after restoring
-		-- This also cleans up state for any windows that were closed while focus was enabled
-		saved = {}
-
-		-- Force visual refresh to ensure all windows update immediately
-		-- Scheduled redraw ensures the UI updates even if windows are not yet fully rendered
-		vim.schedule(function()
-			vim.cmd("redraw!")
-		end)
+function M.reapply()
+	if not state.enabled then
+		return
 	end
 
-	vim.notify("Focus mode " .. (enabled and "ON" or "OFF"))
+	apply_focus()
+	update_winhighlight()
+	vim.cmd("redraw!")
+end
+
+function M.setup_autocmd()
+	local group = vim.api.nvim_create_augroup("FocusNvim", { clear = true })
+
+	vim.api.nvim_create_autocmd("ColorScheme", {
+		group = group,
+		callback = function()
+			M.reapply()
+		end,
+	})
+
+	vim.api.nvim_create_autocmd({ "VimEnter", "WinEnter", "WinClosed", "TabEnter" }, {
+		group = group,
+		callback = function()
+			auto_update()
+			if state.enabled then
+				update_winhighlight()
+			end
+		end,
+	})
+
+	auto_update()
 end
 
 return M
